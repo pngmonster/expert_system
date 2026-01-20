@@ -1,4 +1,4 @@
-# Career Expert System
+# Expert System
 
 Веб-приложение для персонализированного подбора специальностей с логикой на Prolog и пошаговым интерфейсом на Flask.
 
@@ -11,7 +11,7 @@
 
 ## ⚡ Установка и запуск локально
 ```bash
-git clone https://github.com/<username>/<repo>.git
+git clone https://github.com/pngmonster/expert_system
 cd <repo>
 python3 -m venv venv
 source venv/bin/activate
