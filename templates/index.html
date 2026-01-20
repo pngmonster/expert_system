@@ -10,7 +10,7 @@
 <div class="container py-5 text-center">
     <h1>Экспертная система выбора профессии</h1>
     <p>Ответьте на несколько вопросов и получите персональные рекомендации.</p>
-    <a href="{{ url_for('questionnaire') }}" class="btn btn-primary btn-lg mt-3">Начать тест</a>
+    <a href="{{ url_for('question', step=0) }}" class="btn btn-primary btn-lg mt-3">Начать тест</a>
 </div>
 </body>
 </html>

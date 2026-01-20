@@ -1,11 +1,90 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 from pyswip import Prolog
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey"  # для хранения сессии
+
 prolog = Prolog()
 prolog.consult("expert.pl")
 
-# Словарь для хранения баллов, имитируя глобальную переменную scores
+# все вопросы и варианты
+questions = [
+    {
+        "id": "personal_traits",
+        "title": "Личностные качества (1-5)",
+        "type": "slider",
+        "fields": [
+            ("trait_analytical", "Логическое мышление"),
+            ("trait_creativity", "Творческий подход"),
+            ("trait_communication", "Коммуникабельность"),
+            ("trait_leadership", "Лидерство")
+        ]
+    },
+    {
+        "id": "interests",
+        "title": "Выберите ваши интересы (можно несколько)",
+        "type": "checkbox",
+        "options": [
+            ("math", "Математика и точные науки"),
+            ("biology_medicine", "Биология и медицина"),
+            ("technology", "Технологии и IT"),
+            ("humanities", "Гуманитарные науки"),
+            ("creativity_design", "Творчество и дизайн"),
+            ("business_economics", "Бизнес и экономика"),
+            ("engineering", "Инженерия и техника"),
+            ("science_research", "Научные исследования"),
+            ("social_help", "Социальная помощь"),
+            ("nature_outdoors", "Природа и окружающая среда")
+        ]
+    },
+    {
+        "id": "skills",
+        "title": "Выберите ваши навыки (можно несколько)",
+        "type": "checkbox",
+        "options": [
+            ("analytical_thinking", "Аналитическое мышление"),
+            ("communication", "Коммуникация и убеждение"),
+            ("creativity", "Творчество и креативность"),
+            ("programming", "Программирование и IT"),
+            ("mathematical_thinking", "Математическое мышление"),
+            ("visual_thinking", "Визуальное мышление"),
+            ("helping_people", "Помощь людям"),
+            ("attention_to_detail", "Внимание к деталям"),
+            ("leadership", "Лидерство и управление"),
+            ("problem_solving", "Решение проблем"),
+            ("languages", "Языковые способности"),
+            ("organization", "Организация и планирование"),
+            ("manual_dexterity", "Ручная работа и моторика")
+        ]
+    },
+    {
+        "id": "work_env",
+        "title": "Предпочтительная рабочая среда",
+        "type": "radio",
+        "options": [
+            ("office", "Офисная работа"),
+            ("lab", "Лаборатория"),
+            ("field", "Полевые условия"),
+            ("remote", "Удаленная работа"),
+            ("creative_studio", "Творческая студия"),
+            ("medical", "Медицинское учреждение"),
+            ("educational", "Образовательное учреждение")
+        ]
+    },
+    {
+        "id": "education",
+        "title": "Уровень образования",
+        "type": "radio",
+        "options": [
+            ("bachelors", "Бакалавриат"),
+            ("masters", "Магистратура"),
+            ("phd", "Аспирантура/PhD"),
+            ("vocational", "Среднее профессиональное")
+        ]
+    }
+]
+
+# глобальный словарь баллов
 scores = {}
 
 def add_points_from_prolog(query_template, key, value):
@@ -20,127 +99,56 @@ def add_points_from_prolog(query_template, key, value):
     except Exception as e:
         print(f"Ошибка при обработке запроса: {e}")
 
-def add_interest(key, value=2):
-    add_points_from_prolog("interest({key}, L).", key, value)
-
-def add_skill(key, value=2):
-    add_points_from_prolog("skill({key}, L).", key, value)
-
-def add_work_environment(key, value=1):
-    add_points_from_prolog("work_environment({key}, L).", key, value)
-
-def add_education_level(key, value=1):
-    add_points_from_prolog("education_level({key}, L).", key, value)
+def process_answers(step_id, form_data):
+    # начисляем баллы
+    if step_id == "personal_traits":
+        for field, val in form_data.items():
+            val = int(val)
+            if val >= 4:
+                add_skill(field, val-2)
+    elif step_id == "interests":
+        for val in form_data.getlist("answers"):
+            add_points_from_prolog("interest({key}, L).", val, 2)
+    elif step_id == "skills":
+        for val in form_data.getlist("answers"):
+            add_points_from_prolog("skill({key}, L).", val, 2)
+    elif step_id == "work_env":
+        val = form_data.get("answers")
+        if val:
+            add_points_from_prolog("work_environment({key}, L).", val, 1)
+    elif step_id == "education":
+        val = form_data.get("answers")
+        if val:
+            add_points_from_prolog("education_level({key}, L).", val, 1)
 
 @app.route("/")
 def index():
-    # стартовая страница с кнопкой "Начать тест"
+    session.clear()
     return render_template("index.html")
 
-@app.route("/questionnaire", methods=["GET", "POST"])
-def questionnaire():
+@app.route("/question/<int:step>", methods=["GET", "POST"])
+def question(step):
+    if step >= len(questions):
+        return redirect("/results")
+
+    q = questions[step]
+
     if request.method == "POST":
-        # личные данные
-        name = request.form.get("name")
-        traits = {
-            "analytical_thinking": int(request.form.get("trait_analytical", 1)),
-            "creativity": int(request.form.get("trait_creativity", 1)),
-            "communication": int(request.form.get("trait_communication", 1)),
-            "leadership": int(request.form.get("trait_leadership", 1))
-        }
+        process_answers(q["id"], request.form)
+        return redirect(f"/question/{step+1}")
 
-        # начисляем баллы по личным качествам
-        if traits["analytical_thinking"] >= 4:
-            add_skill("analytical_thinking", traits["analytical_thinking"]-2)
-        if traits["creativity"] >= 4:
-            add_skill("creativity", traits["creativity"]-2)
-        if traits["communication"] >= 4:
-            add_skill("communication", traits["communication"]-2)
-        if traits["leadership"] >= 4:
-            add_skill("leadership", traits["leadership"]-2)
-
-        # интересы
-        selected_interests = request.form.getlist("interests")
-        for interest in selected_interests:
-            add_interest(interest, 2)
-
-        # навыки
-        selected_skills = request.form.getlist("skills")
-        for skill in selected_skills:
-            add_skill(skill, 2)
-
-        # рабочая среда
-        work_env = request.form.get("work_env")
-        if work_env:
-            add_work_environment(work_env, 1)
-
-        # уровень образования
-        edu_level = request.form.get("education")
-        if edu_level:
-            add_education_level(edu_level, 1)
-
-        return redirect(url_for('results'))
-
-    # GET запрос - отобразить форму
-    interests_options = [
-        ("math", "Математика и точные науки"),
-        ("biology_medicine", "Биология и медицина"),
-        ("technology", "Технологии и IT"),
-        ("humanities", "Гуманитарные науки"),
-        ("creativity_design", "Творчество и дизайн"),
-        ("business_economics", "Бизнес и экономика"),
-        ("engineering", "Инженерия и техника"),
-        ("science_research", "Научные исследования"),
-        ("social_help", "Социальная помощь"),
-        ("nature_outdoors", "Природа и окружающая среда")
-    ]
-    skills_options = [
-        ("analytical_thinking", "Аналитическое мышление"),
-        ("communication", "Коммуникация и убеждение"),
-        ("creativity", "Творчество и креативность"),
-        ("programming", "Программирование и IT"),
-        ("mathematical_thinking", "Математическое мышление"),
-        ("visual_thinking", "Визуальное мышление"),
-        ("helping_people", "Помощь людям"),
-        ("attention_to_detail", "Внимание к деталям"),
-        ("leadership", "Лидерство и управление"),
-        ("problem_solving", "Решение проблем"),
-        ("languages", "Языковые способности"),
-        ("organization", "Организация и планирование"),
-        ("manual_dexterity", "Ручная работа и моторика")
-    ]
-    work_env_options = [
-        ("office", "Офисная работа"),
-        ("lab", "Лаборатория"),
-        ("field", "Полевые условия"),
-        ("remote", "Удаленная работа"),
-        ("creative_studio", "Творческая студия"),
-        ("medical", "Медицинское учреждение"),
-        ("educational", "Образовательное учреждение")
-    ]
-    edu_options = [
-        ("bachelors", "Бакалавриат"),
-        ("masters", "Магистратура"),
-        ("phd", "Аспирантура/PhD"),
-        ("vocational", "Среднее профессиональное")
-    ]
-    return render_template("questionnaire.html",
-                           interests_options=interests_options,
-                           skills_options=skills_options,
-                           work_env_options=work_env_options,
-                           edu_options=edu_options)
+    progress = int((step / len(questions)) * 100)
+    return render_template("step_question.html", question=q, step=step, total=len(questions), progress=progress)
 
 @app.route("/results")
 def results():
     if not scores:
         return "Не было получено достаточно данных для анализа."
 
-    # Сортируем по убыванию
     sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     top_recommendations = sorted_scores[:5]
 
-    return render_template("results.html", top_recommendations=top_recommendations,
-                           all_scores=sorted_scores)
+    return render_template("results.html", top_recommendations=top_recommendations, all_scores=sorted_scores)
 
 if __name__ == "__main__":
     app.run(debug=True)
