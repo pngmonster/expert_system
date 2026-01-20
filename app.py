@@ -1,6 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from pyswip import Prolog
 
+app = Flask(__name__, static_folder='static')
+app.secret_key = "supersecretkey"  # для хранения сессии
+
+prolog = Prolog()
+prolog.consult("expert.pl")
+
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # для хранения сессии
 
@@ -149,6 +155,31 @@ def results():
     top_recommendations = sorted_scores[:5]
 
     return render_template("results.html", top_recommendations=top_recommendations, all_scores=sorted_scores)
+
+def add_points_from_prolog(query_template, key, value):
+    """Универсальная функция для добавления баллов из Prolog запроса"""
+    global scores
+    try:
+        query = query_template.format(key=key)
+        res = list(prolog.query(query))
+        if res:
+            prolog_list = res[0]['L']
+            for sp in prolog_list:
+                scores[sp] = scores.get(sp, 0) + value
+    except Exception as e:
+        print(f"Ошибка при обработке запроса: {e}")
+
+def add_interest(key, value=2):
+    add_points_from_prolog("interest({key}, L).", key, value)
+
+def add_skill(key, value=2):
+    add_points_from_prolog("skill({key}, L).", key, value)
+
+def add_work_environment(key, value=1):
+    add_points_from_prolog("work_environment({key}, L).", key, value)
+
+def add_education_level(key, value=1):
+    add_points_from_prolog("education_level({key}, L).", key, value)
 
 if __name__ == "__main__":
     app.run(debug=True)
